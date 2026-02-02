@@ -1,0 +1,95 @@
+[build-system]
+requires = [ "hatchling",]
+build-backend = "hatchling.build"
+
+[project]
+name = "gvsbuild"
+version = "2026.2.0"
+description = "GTK stack for Windows"
+readme = "README.md"
+requires-python = "<4.0,>=3.10,!=3.13.4"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: X11 Applications :: GTK",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Software Development :: Build Tools",
+]
+dependencies = [
+    "build>=1.3.0",
+    "setuptools >=69.2; python_version >= \"3.12\"",
+    "cyclopts>=4.0.0b2",
+    "pip",
+]
+dynamic = []
+
+[project.license]
+file = "COPYING"
+
+[[project.authors]]
+name = "Ignacio Casal Quinteiro"
+email = "qignacio@amazon.com"
+
+[[project.authors]]
+name = "Dan Yeaw"
+email = "dan@yeaw.me"
+
+[project.scripts]
+gvsbuild = "gvsbuild.main:run"
+
+[project.optional-dependencies]
+outdated = [
+    "lastversion >=2.4.2,<4.0.0",
+    "packaging >=25.0",
+]
+
+[dependency-groups]
+dev = [
+    "prek >=0.2.23",
+    "pytest>=7.1.3,<10.0.0",
+    "tox >=4.1.2,<5.0.0",
+    "pytest-mock >=3.10.0",
+]
+
+[[tool.mypy.overrides]]
+module = "lastversion"
+ignore_missing_imports = true
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+isolated_build = true
+envlist = py{310,311,312,313,314}
+
+[gh-actions]
+python =
+    3.10: py310
+    3.11: py311
+    3.12: py312
+    3.13: py313
+    3.14: py314
+
+[testenv]
+commands = pytest
+deps = 
+    pytest
+    pytest-mock
+"""
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+ignore = ["E501"]
+select = [
+    "B",
+    "B9",
+    "C",
+    "E",
+    "F",
+    "UP",
+    "W",
+]
+extend-select = ["I"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 20

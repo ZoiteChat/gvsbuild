@@ -1,0 +1,180 @@
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  python_version: '3.14'
+
+name: CI
+
+permissions:
+  contents: read
+
+jobs:
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: "!contains(github.event.head_commit.message, 'skip ci')"
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.python_version }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@803947b9bd8e9f986429fa0c5a41c367cd732b41 # v7.2.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: ".pre-commit-config.yaml"
+      - name: Install prek
+        run: uv tool install prek
+      - name: Lint with prek
+        run: prek run --show-diff-on-failure --color=always --all-files
+      - name: Check uv lock file integrity
+        run: uv lock --locked --offline
+
+  test:
+    needs: lint
+    name: Test with Python ${{ matrix.python-version }}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    if: "!contains(github.event.head_commit.message, 'skip ci')"
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@803947b9bd8e9f986429fa0c5a41c367cd732b41 # v7.2.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Install the project
+        run: uv sync
+      - name: Install tox
+        run: uv tool install tox --with tox-uv
+      - name: Setup test suite
+        run: tox run --notest --skip-missing-interpreters false
+      - name: Run test suite
+        run: tox run --skip-pkg-install
+
+  build:
+    needs: lint
+    name: Build GTK${{ matrix.gtk-version }} Binaries
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    timeout-minutes: 120
+    if: "!contains(github.event.head_commit.message, 'skip ci')"
+    strategy:
+      matrix:
+        gtk-version: ['3', '4']
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.python_version }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@803947b9bd8e9f986429fa0c5a41c367cd732b41 # v7.2.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Install the project
+        run: uv sync --no-dev
+      - name: Build GTK3
+        if: matrix.gtk-version == '3'
+        run: >
+          uv run gvsbuild build --ninja-opts -j2 --enable-gi --py-wheel gtk3 gtksourceview4 graphene pygobject
+          adwaita-icon-theme glib-networking gtkmm3
+      - name: Build GTK4
+        if: matrix.gtk-version == '4'
+        run: > # Use -j2 option to prevent out of memory errors with GitHub Action runners
+          uv run gvsbuild build --ninja-opts -j2 --enable-gi --py-wheel gtk4 libadwaita gtksourceview5 pygobject
+          adwaita-icon-theme gtkmm
+      - name: Copy wheel files
+        run: |
+          New-Item "C:\gtk-build\gtk\x64\release\wheels" -ItemType "directory"
+          Copy-Item (Resolve-Path C:\gtk-build\build\x64\release\pygobject\dist\PyGObject*.whl) "C:\gtk-build\gtk\x64\release\wheels"
+          Copy-Item (Resolve-Path C:\gtk-build\build\x64\release\pycairo\dist\pycairo*.whl) "C:\gtk-build\gtk\x64\release\wheels"
+      - name: Archive GTK runtime
+        run: 7z a -tzip GTK${{ matrix.gtk-version }}_Gvsbuild_${{ github.sha }}_x64.zip C:\gtk-build\gtk\x64\release\*
+      - name: Upload GTK${{ matrix.gtk-version }}_Gvsbuild-${{ github.sha }}_x64.zip
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: GTK${{ matrix.gtk-version }}_Gvsbuild_${{ github.sha }}_x64.zip
+          path: GTK${{ matrix.gtk-version }}_Gvsbuild_${{ github.sha }}_x64.zip
+      - name: Upload Release Assets
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mv GTK${{ matrix.gtk-version }}_Gvsbuild_${{ github.sha }}_x64.zip GTK${{ matrix.gtk-version }}_Gvsbuild_${{ github.event.release.tag_name }}_x64.zip
+          gh release upload ${{ github.event.release.tag_name }} "GTK${{ matrix.gtk-version }}_Gvsbuild_${{ github.event.release.tag_name }}_x64.zip"
+      - name: Cleanup Zip Files
+        if: github.event_name == 'release'
+        run: rm GTK${{ matrix.gtk-version }}_Gvsbuild_${{ github.event.release.tag_name }}_x64.zip
+      - name: Create Source Dist and Wheel
+        if: matrix.gtk-version == '4'
+        run: uv build
+      - name: Upload gvsbuild-${{ github.event.release.tag_name }}.tar.gz
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: github.event_name == 'release' && matrix.gtk-version == '4'
+        with:
+          name: gvsbuild-${{ github.event.release.tag_name }}.tar.gz
+          path: dist/gvsbuild-${{ github.event.release.tag_name }}.tar.gz
+      - name: Upload gvsbuild-${{ github.event.release.tag_name }}-py3-none-any.whl
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: github.event_name == 'release' && matrix.gtk-version == '4'
+        with:
+          name: gvsbuild-${{ github.event.release.tag_name }}-py3-none-any.whl
+          path: dist/gvsbuild-${{ github.event.release.tag_name }}-py3-none-any.whl
+  publish-to-pypi:
+    name: Publish to PyPI (release only)
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      id-token: write
+    if: ${{ github.event_name == 'release' }}
+    steps:
+      - name: Download tar.gz
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: gvsbuild-${{ github.event.release.tag_name }}.tar.gz
+          path: dist
+      - name: Download wheel
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: gvsbuild-${{ github.event.release.tag_name }}-py3-none-any.whl
+          path: dist
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0

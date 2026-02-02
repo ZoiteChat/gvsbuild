@@ -1,7 +1,4 @@
-#  Copyright (C) 2016 - Yevgen Muntyan
-#  Copyright (C) 2016 - Ignacio Casal Quinteiro
-#  Copyright (C) 2016 - Arnavion
-#  Copyright (C) 2017 - Daniele Forghieri
+#  Copyright (C) 2016 The Gvsbuild Authors
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -16,12 +13,11 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program; if not, see <http://www.gnu.org/licenses/>.
 
-"""
-Base group class, from the project one, as a placeholder to build more than
-one project from a single one
-"""
+"""Base group class, from the project one, as a placeholder to build more than
+one project from a single one."""
 
-from .base_project import Project, GVSBUILD_GROUP
+from .base_project import Project, ProjectType
+
 
 class Group(Project):
     def __init__(self, name, **kwargs):
@@ -34,13 +30,12 @@ class Group(Project):
     def build(self):
         pass
 
-    @staticmethod
-    def add(proj):
-        Project.add(proj, type=GVSBUILD_GROUP)
+    def export(self):
+        pass
+
 
 def group_add(cls):
-    """
-    Class decorator to add the newly created Group class to the global projects/tools/groups list
-    """
-    Group.add(cls())
+    """Class decorator to add the newly created Group class to the global
+    projects/tools/groups list."""
+    Project.register(cls, ProjectType.GROUP)
     return cls

@@ -1,6 +1,4 @@
-#  Copyright (C) 2016 - Yevgen Muntyan
-#  Copyright (C) 2016 - Ignacio Casal Quinteiro
-#  Copyright (C) 2016 - Arnavion
+#  Copyright (C) 2016 The Gvsbuild Authors
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -15,220 +13,226 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program; if not, see <http://www.gnu.org/licenses/>.
 
-"""
-Default tools used to build the various projects
-"""
+"""Default tools used to build the various projects."""
 
 import os
-import sys
+import subprocess
 
-from .utils.base_tool import Tool, tool_add
 from .utils.base_expanders import extract_exec
+from .utils.base_tool import Tool, tool_add
+
 
 @tool_add
-class Tool_cmake(Tool):
+class ToolCargo(Tool):
     def __init__(self):
-        Tool.__init__(self,
-            'cmake',
-            archive_url = 'https://cmake.org/files/v3.7/cmake-3.7.2-win64-x64.zip',
-            hash = 'def3bb81dfd922ce1ea2a0647645eefb60e128d520c8ca707c5996c331bc8b48',
-            dir_part = 'cmake-3.7.2-win64-x64')
+        Tool.__init__(
+            self,
+            "cargo",
+            version="1.93.0",
+            repository="https://github.com/rust-lang/rust",
+            archive_url="https://win.rustup.rs/x86_64",
+            archive_filename="rustup-init.exe",
+            exe_name="cargo.exe",
+        )
 
-    def load_defaults(self, builder):
-        Tool.load_defaults(self, builder)
-        # Set the builder object to point to the file to use
-        self.cmake_path = self.build_dir
+    def load_defaults(self):
+        Tool.load_defaults(self)
+        self.tool_path = os.path.join(self.build_dir, "bin")
+        self.full_exe = os.path.join(self.tool_path, "cargo.exe")
+
+        self.add_extra_env("RUSTUP_HOME", self.build_dir)
+        self.add_extra_env("CARGO_HOME", self.build_dir)
 
     def unpack(self):
-        destfile = os.path.join(self.cmake_path, 'bin', 'cmake.exe')
-        extract_exec(self.archive_file, self.builder.opts.tools_root_dir, dir_part = self.dir_part, check_file = destfile, check_mark=True)
+        env = os.environ.copy()
+        env["RUSTUP_HOME"] = self.build_dir
+        env["CARGO_HOME"] = self.build_dir
 
-    def get_path(self):
-        return os.path.join(self.cmake_path, 'bin')
+        toolchain = (
+            f"{self.version}-{'i686' if self.opts.x86 else 'x86_64'}-pc-windows-msvc"
+        )
+        subprocess.run(
+            f"{self.archive_file} --no-modify-path --default-toolchain {toolchain} -y",
+            check=True,
+            env=env,
+        )
+
+        self.mark_deps = True
+
 
 @tool_add
-class Tool_meson(Tool):
+class ToolCmake(Tool):
     def __init__(self):
-        Tool.__init__(self,
-            'meson',
-            archive_url = 'https://github.com/mesonbuild/meson/archive/0.44.0.zip',
-            archive_file_name = 'meson-0.44.0.zip',
-            hash = '9ec17410c119520a669ad3107229ab1e5d377c0b3c0d1de85065e2c5cb9c9c8d',
-            dir_part = 'meson-0.44.0')
+        Tool.__init__(
+            self,
+            "cmake",
+            version="4.2.2",
+            repository="https://gitlab.kitware.com/cmake/cmake",
+            archive_url="https://github.com/Kitware/CMake/releases/download/v{version}/cmake-{version}-windows-x86_64.zip",
+            hash="b71b3515bbba0b9b0e05852a3bcb82af548579fdcd6ba7a23f8608518c44bdde",
+            dir_part="cmake-{version}-windows-x86_64",
+        )
 
-    def load_defaults(self, builder):
-        Tool.load_defaults(self, builder)
-        # Set the builder object to point to the file to use
-        builder.meson = os.path.join(self.build_dir, 'meson.py')
+    def load_defaults(self):
+        Tool.load_defaults(self)
+        self.tool_path = os.path.join(self.build_dir, "bin")
+        self.full_exe = os.path.join(self.tool_path, "cmake.exe")
 
     def unpack(self):
-        extract_exec(self.archive_file, self.builder.opts.tools_root_dir, dir_part = self.dir_part, check_file = self.builder.meson, check_mark=True)
+        self.mark_deps = extract_exec(
+            self.archive_file,
+            self.opts.tools_root_dir,
+            dir_part=self.dir_part,
+            check_file=self.full_exe,
+            check_mark=True,
+        )
 
-    def get_path(self):
-        pass
 
 @tool_add
-class Tool_msys2(Tool):
+class ToolMeson(Tool):
     def __init__(self):
-        Tool.__init__(self,
-            'msys2')
-
-    def load_defaults(self, builder):
-        Tool.load_defaults(self, builder)
-        self.msys_path = os.path.join(builder.opts.msys_dir, 'usr', 'bin')
+        Tool.__init__(
+            self,
+            "meson",
+            version="1.10.1",
+            repository="https://github.com/mesonbuild/meson",
+            archive_url="https://github.com/mesonbuild/meson/archive/refs/tags/{version}.tar.gz",
+            archive_filename="meson-{version}.tar.gz",
+            hash="3d4768a76fc63dc4c562edc7892de17b54dfaa7309d148e805b0d763bc085e00",
+            dir_part="meson-{version}",
+            exe_name="meson.py",
+        )
 
     def unpack(self):
-        pass
+        self.mark_deps = extract_exec(
+            self.archive_file,
+            self.builder.opts.tools_root_dir,
+            dir_part=self.dir_part,
+            check_file=self.full_exe,
+            check_mark=True,
+            strip_one=True,
+        )
+
+
+@tool_add
+class ToolMsys2(Tool):
+    def __init__(self):
+        Tool.__init__(self, "msys2")
+        self.internal = True
+
+    def load_defaults(self):
+        Tool.load_defaults(self)
+        self.tool_path = os.path.join(self.opts.msys_dir, "usr", "bin")
+
+    def unpack(self):
+        self.tool_mark()
 
     def get_path(self):
         # We always put msys at the end of path
-        return None, self.msys_path
+        return None, self.tool_path
+
 
 @tool_add
-class Tool_nasm(Tool):
+class ToolNasm(Tool):
     def __init__(self):
-        Tool.__init__(self,
-            'nasm',
-            archive_url = 'http://www.nasm.us/pub/nasm/releasebuilds/2.13.01/win64/nasm-2.13.01-win64.zip',
-            hash = '8b368c5ed7f9deb33be90918e8c19b2fbf004fbe74b743e515674c75943d3362',
-            dir_part = 'nasm-2.13.01')
-
-    def load_defaults(self, builder):
-        Tool.load_defaults(self, builder)
-        self.nasm_path = self.build_dir
+        Tool.__init__(
+            self,
+            "nasm",
+            version="3.01",
+            repository="https://github.com/netwide-assembler/nasm",
+            archive_url="https://www.nasm.us/pub/nasm/releasebuilds/{version}/win64/nasm-{version}-win64.zip",
+            hash="e0ba5157007abc7b1a65118a96657a961ddf55f7e3f632ee035366dfce039ca4",
+            dir_part="nasm-{version}",
+            exe_name="nasm.exe",
+        )
 
     def unpack(self):
-        # We download directly the exe file so we copy it on the tool directory ...
-        destfile = os.path.join(self.build_dir, 'nasm.exe')
-        extract_exec(self.archive_file, self.builder.opts.tools_root_dir, dir_part = self.dir_part, check_file = destfile, force_dest = destfile, check_mark=True)
+        # We directly download the exe file, so we copy it on the tool directory
+        self.mark_deps = extract_exec(
+            self.archive_file,
+            self.builder.opts.tools_root_dir,
+            dir_part=self.dir_part,
+            check_file=self.full_exe,
+            force_dest=self.full_exe,
+            check_mark=True,
+        )
 
-    def get_path(self):
-        return self.nasm_path
 
 @tool_add
-class Tool_ninja(Tool):
+class ToolNinja(Tool):
     def __init__(self):
-        Tool.__init__(self,
-            'ninja',
-            archive_url = 'https://github.com/ninja-build/ninja/releases/download/v1.8.2/ninja-win.zip',
-            archive_file_name = 'ninja-win-1.8.2.zip',
-            hash = 'c80313e6c26c0b9e0c241504718e2d8bbc2798b73429933adf03fdc6d84f0e70')
-
-    def load_defaults(self, builder):
-        Tool.load_defaults(self, builder)
-        # Set the builder object to point to the path to use
-        self.ninja_path = self.build_dir
+        Tool.__init__(
+            self,
+            "ninja",
+            version="1.13.2",
+            repository="https://github.com/ninja-build/ninja",
+            archive_url="https://github.com/ninja-build/ninja/releases/download/v{version}/ninja-win.zip",
+            archive_filename="ninja-win-{version}.zip",
+            hash="07fc8261b42b20e71d1720b39068c2e14ffcee6396b76fb7a795fb460b78dc65",
+            dir_part="ninja-{version}",
+            exe_name="ninja.exe",
+        )
 
     def unpack(self):
-        destfile = os.path.join(self.ninja_path, 'ninja.exe')
-        extract_exec(self.archive_file, self.ninja_path, check_file = destfile, check_mark=True)
+        self.mark_deps = extract_exec(
+            self.archive_file, self.build_dir, check_file=self.full_exe, check_mark=True
+        )
 
-    def get_path(self):
-        return self.ninja_path
-
-@tool_add
-class Tool_nuget(Tool):
-    def __init__(self):
-        Tool.__init__(self,
-            'nuget',
-            archive_url = 'https://dist.nuget.org/win-x86-commandline/v4.3.0/nuget.exe',
-            archive_file_name = 'nuget-4.3.0.exe',
-            hash = '386da77a8cf2b63d1260b7020feeedabfe3b65ab31d20e6a313a530865972f3a')
-
-    def load_defaults(self, builder):
-        Tool.load_defaults(self, builder)
-        # Set the builder object to point to the .exe file to use
-        builder.nuget = os.path.join(self.build_dir, 'nuget.exe')
-
-    def unpack(self):
-        # We download directly the exe file so we copy it on the tool directory ...
-        extract_exec(self.archive_file, self.build_dir, check_file = self.builder.nuget, force_dest = self.builder.nuget, check_mark=True)
-
-    def get_path(self):
-        # No need to add the path, we use the full file name
-        pass
 
 @tool_add
-class Tool_perl(Tool):
+class ToolPerl(Tool):
     def __init__(self):
-        Tool.__init__(self,
-            'perl',
-            archive_url = 'https://github.com/wingtk/gtk-win32/releases/download/Perl-5.20/perl-5.20.0-x64.tar.xz',
-            hash = '05e01cf30bb47d3938db6169299ed49271f91c1615aeee5649174f48ff418c55')
+        Tool.__init__(
+            self,
+            "perl",
+            version="5.20.0",
+            repository="https://github.com/Perl/perl5",
+            archive_url="https://github.com/wingtk/gtk-win32/releases/download/Perl-{major}.{minor}/perl-{version}-x64.tar.xz",
+            hash="05e01cf30bb47d3938db6169299ed49271f91c1615aeee5649174f48ff418c55",
+            dir_part="perl-{version}",
+        )
 
-    def load_defaults(self, builder):
-        Tool.load_defaults(self, builder)
-        # Set the builder object to point to the path to use, when we need to pass directly
-        # the executable to *make
-        builder.perl_dir = os.path.join(self.build_dir, 'x64')
+    def load_defaults(self):
+        Tool.load_defaults(self)
+        # Set the builder object to point to the path to use, when we need to pass directly the executable to *make
+        self.base_dir = os.path.join(self.build_dir, "x64")
         # full path, added to the environment when needed
-        self.perl_path = os.path.join(builder.perl_dir, 'bin')
+        self.tool_path = os.path.join(self.base_dir, "bin")
+        self.full_exe = os.path.join(self.tool_path, "perl.exe")
 
     def unpack(self):
-        destfile = os.path.join(self.perl_path, 'perl.exe')
-        extract_exec(self.archive_file, self.build_dir, check_file = destfile, check_mark=True)
+        self.mark_deps = extract_exec(
+            self.archive_file, self.build_dir, check_file=self.full_exe, check_mark=True
+        )
 
-    def get_path(self):
-        return self.perl_path
+    def get_base_dir(self):
+        return self.base_dir
+
 
 @tool_add
-class Tool_python(Tool):
+class ToolGo(Tool):
     def __init__(self):
-        Tool.__init__(self,
-            'python')
+        Tool.__init__(
+            self,
+            "go",
+            version="1.25.6",
+            repository="https://github.com/golang/go",
+            archive_url="https://go.dev/dl/go{version}.windows-amd64.zip",
+            hash="19b4733b727ba5c611b5656187f3ac367d278d64c3d4199a845e39c0fdac5335",
+            dir_part="go-{version}",
+        )
 
-    def load_defaults(self, builder):
-        Tool.load_defaults(self, builder)
-        if builder.opts.python_dir:
-            # From the command line, hope is at least 3.4 ...
-            self.python_path = builder.opts.python_dir
-        else:
-            # We use the one that call the script
-            self.python_path = os.path.dirname(sys.executable)
+    def load_defaults(self):
+        Tool.load_defaults(self)
+        self.tool_path = os.path.join(self.build_dir, "bin")
+        self.full_exe = os.path.join(self.tool_path, "go.exe")
 
     def unpack(self):
-        pass
-
-    def get_path(self):
-        return self.python_path
-
-@tool_add
-class Tool_yasm(Tool):
-    def __init__(self):
-        Tool.__init__(self,
-            'yasm',
-            archive_url = 'http://www.tortall.net/projects/yasm/releases/yasm-1.3.0-win64.exe',
-            hash = 'd160b1d97266f3f28a71b4420a0ad2cd088a7977c2dd3b25af155652d8d8d91f')
-
-    def load_defaults(self, builder):
-        Tool.load_defaults(self, builder)
-        self.yasm_path = self.build_dir
-
-    def unpack(self):
-        # We download directly the exe file so we copy it on the tool directory ...
-        destfile = os.path.join(self.build_dir, 'yasm.exe')
-        extract_exec(self.archive_file, self.build_dir, check_file = destfile, force_dest = destfile, check_mark=True)
-
-    def get_path(self):
-        return self.yasm_path
-
-@tool_add
-class Tool_go(Tool):
-    def __init__(self):
-        Tool.__init__(self,
-            'go',
-            archive_url = 'https://dl.google.com/go/go1.10.windows-amd64.zip',
-            hash = '210b223031c254a6eb8fa138c3782b23af710a9959d64b551fa81edd762ea167')
-
-    def load_defaults(self, builder):
-        Tool.load_defaults(self, builder)
-        self.go_dir = os.path.join(self.build_dir, 'go')
-        self.go_path = os.path.join(self.go_dir, 'bin')
-
-    def unpack(self):
-        # We download directly the exe file so we copy it on the tool directory ...
-        destfile = os.path.join(self.go_path, 'go.exe')
-        extract_exec(self.archive_file, self.build_dir, check_file = destfile, check_mark=True)
-
-    def get_path(self):
-        return self.go_path
+        # We download directly the exe file, so we copy it to the tool directory
+        self.mark_deps = extract_exec(
+            self.archive_file,
+            self.build_dir,
+            check_file=self.full_exe,
+            check_mark=True,
+            strip_one=True,
+        )

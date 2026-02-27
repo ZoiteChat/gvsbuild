@@ -332,6 +332,10 @@ by adding the `--ninja-opts -j2` option, where 2 is the number of cores.
 - If you are getting a C4819 error or warning, this is an issue of Visual Studio running on
 CJK (East Asian) locales. Set your system's locale setting for non-Unicode to English
 (United States), reboot, and restart the build, and the code should build normally.
+- On GitHub Windows runners, if you encounter errors involving basic Linux command line tools, it may be related to Git Bash and MSYS2 environment conflicts, as both are installed on official GitHub Windows images and Git Bash may take precedence over MSYS2.  
+  Workaround:
+  - Prioritize the MSYS2 environment: `$env:Path = "C:\msys64\usr\bin;$env:Path"`
+  - Make sure gvsbuild uses environment variables as-is: enable the gvsbuild build option `--use-env`
 
 ## OpenSSL
 

@@ -114,14 +114,42 @@ jobs:
       - name: Build GTK3
         if: matrix.gtk-version == '3'
         run: >
-          uv run gvsbuild build --ninja-opts -j2 --enable-gi --py-wheel gtk3 gtksourceview4 graphene pygobject
-          adwaita-icon-theme glib-networking gtkmm3 lgi
+          uv run gvsbuild build --ninja-opts -j2 gtk3 enchant glib-networking
       - name: Build GTK4
         if: matrix.gtk-version == '4'
         run: > # Use -j2 option to prevent out of memory errors with GitHub Action runners
           uv run gvsbuild build --ninja-opts -j2 --enable-gi --py-wheel gtk4 libadwaita gtksourceview5 pygobject protobuf-c
           adwaita-icon-theme gtkmm
+      - name: Verify GTK3 ZoiteChat runtime DLLs
+        if: matrix.gtk-version == '3'
+        shell: pwsh
+        run: |
+          $dllPath = "C:\gtk-build\gtk\x64\release\bin"
+          $requiredDlls = @(
+            "gtk-3-vs17.dll",
+            "gdk-3-vs17.dll",
+            "gio-2.0-0.dll",
+            "gdk_pixbuf-2.0-0.dll",
+            "pangocairo-1.0-0.dll",
+            "pango-1.0-0.dll",
+            "cairo-2.dll",
+            "gobject-2.0-0.dll",
+            "gmodule-2.0-0.dll",
+            "glib-2.0-0.dll",
+            "intl.dll",
+            "libssl-3-x64.dll",
+            "libcrypto-3-x64.dll",
+            "libenchant.dll",
+            "libenchant_ispell.dll",
+            "libenchant_myspell.dll"
+          )
+          $missing = $requiredDlls | Where-Object { -not (Test-Path (Join-Path $dllPath $_)) }
+          if ($missing.Count -gt 0) {
+            Write-Error "Missing GTK3 runtime DLLs: $($missing -join ', ')"
+            exit 1
+          }
       - name: Copy wheel files
+        if: matrix.gtk-version == '4'
         run: |
           New-Item "C:\gtk-build\gtk\x64\release\wheels" -ItemType "directory"
           Copy-Item (Resolve-Path C:\gtk-build\build\x64\release\pygobject\dist\PyGObject*.whl) "C:\gtk-build\gtk\x64\release\wheels"

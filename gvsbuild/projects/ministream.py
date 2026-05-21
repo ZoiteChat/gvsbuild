@@ -13,30 +13,28 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program; if not, see <http://www.gnu.org/licenses/>.
 
-from gvsbuild.utils.base_builders import CmakeProject
+from gvsbuild.utils.base_builders import Meson
 from gvsbuild.utils.base_expanders import Tarball
 from gvsbuild.utils.base_project import Project, project_add
 
 
 @project_add
-class Libcbor(Tarball, CmakeProject):
+class Ministream(Tarball, Meson):
     def __init__(self):
         Project.__init__(
             self,
-            "libcbor",
-            version="0.14.0",
-            repository="https://github.com/PJK/libcbor",
-            archive_url="https://github.com/PJK/libcbor/archive/refs/tags/v{version}.tar.gz",
-            archive_filename="libcbor-{version}.tar.gz",
-            hash="a8c1516e741562cf95aa4479c64916c3d4d2623e24fdc35e414e2320e7300aae",
-            dependencies=["cmake", "ninja"],
+            "ministream",
+            repository="https://gitlab.gnome.org/sp1rit/ministream",
+            version="0.99.0",
+            archive_url="https://gitlab.gnome.org/-/project/37671/uploads/1caaee1f000934410df11677d1e1cccf/ministream-{version}.tar.xz",
+            hash="6aa0ee83cd877fd86396a1d86294b1cd952da14c29e8f996315939bf961529e3",
+            dependencies=["meson", "glib"],
         )
+        if self.opts.enable_gi:
+            self.add_dependency("gobject-introspection")
+        enable_gi = "enabled" if self.opts.enable_gi else "disabled"
+        self.add_param(f"-Dintrospection={enable_gi}")
 
     def build(self):
-        # If do_install is True, the build fails
-        CmakeProject.build(self, use_ninja=True, do_install=False)
-        self.install(r"_gvsbuild-cmake\src\cbor.lib lib")
-        self.install(r"_gvsbuild-cmake\src\cbor\*.h include\cbor")
-        self.install(r"_gvsbuild-cmake\cbor\*.h include\cbor")
-        self.install(r"src\cbor.h include")
-        self.install(r"src\cbor\*.h include\cbor")
+        Meson.build(self)
+        self.install(r".\COPYING share\doc\ministream")

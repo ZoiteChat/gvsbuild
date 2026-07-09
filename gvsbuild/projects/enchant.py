@@ -17,6 +17,7 @@ from pathlib import Path
 
 from gvsbuild.utils.base_expanders import Tarball
 from gvsbuild.utils.base_project import Project, project_add
+from gvsbuild.utils.utils import convert_to_msys
 
 
 @project_add
@@ -25,61 +26,37 @@ class Enchant(Tarball, Project):
         Project.__init__(
             self,
             "enchant",
-            version="1.6.1",
+            version="2.8.19",
             repository="https://github.com/rrthomas/enchant",
-            archive_url="https://dl.hexchat.net/gtk-win32/src/enchant-{version}.tar.xz",
-            hash="d6cddd2621589ca8becaba1bfe8d3668f7d6592743664ef0e1a35543971fbe6e",
-            dependencies=["glib"],
+            archive_url="https://github.com/rrthomas/enchant/releases/download/v{version}/enchant-{version}.tar.gz",
+            hash="8e7f6cb0c3b79be3146eb3ab93650484adbc59dae5f2c1958fde557080ba678c",
+            dependencies=["glib", "msys2", "pkgconf"],
         )
 
     def build(self):
-        self.push_location(r".\src")
-        cmd = [
-            "nmake",
-            "/nologo",
-            "-f",
-            "makefile.mak",
-            "DLL=1",
-            "MFLAGS=-MD",
-            f"GLIBDIR={Path(self.builder.gtk_dir) / 'include' / 'glib-2.0'}",
-        ]
-        if self.builder.x64:
-            cmd.append("X64=1")
-        self.exec_vs(cmd)
+        msys_path = Project.get_tool_path("msys2")
+        bash = str(Path(msys_path) / "bash")
+        prefix = convert_to_msys(self.builder.gtk_dir)
+        host = "x86_64-w64-mingw32" if self.builder.x64 else "i686-w64-mingw32"
 
-        self.pop_location()
-
-        self.install(
-            r".\bin\release\enchant.exe "
-            r".\bin\release\pdb\enchant.pdb "
-            r".\bin\release\enchant-lsmod.exe "
-            r".\bin\release\pdb\enchant-lsmod.pdb "
-            r".\bin\release\test-enchant.exe "
-            r".\bin\release\pdb\test-enchant.pdb "
-            r".\bin\release\libenchant.dll "
-            r".\bin\release\pdb\libenchant.pdb "
-            r"bin"
+        self.exec_vs(
+            [
+                bash,
+                "./configure",
+                f"--prefix={prefix}",
+                f"--host={host}",
+                "--disable-static",
+                "--without-aspell",
+                "--without-hspell",
+                "--without-hunspell",
+                "--without-nuspell",
+                "--without-voikko",
+                "--without-zemberek",
+                "--with-winspell",
+                "CC=cl",
+                "CXX=cl",
+            ],
+            add_path=msys_path,
         )
-
-        self.install(r".\fonts.conf " r".\fonts.dtd " r"etc\fonts")
-
-        self.install(
-            r".\src\enchant.h "
-            r".\src\enchant++.h "
-            r".\src\enchant-provider.h "
-            r"include\enchant"
-        )
-
-        self.install(r".\bin\release\libenchant.lib lib")
-
-        self.install(
-            r".\bin\release\libenchant_ispell.dll "
-            r".\bin\release\libenchant_ispell.lib "
-            r".\bin\release\pdb\libenchant_ispell.pdb "
-            r".\bin\release\libenchant_myspell.dll "
-            r".\bin\release\libenchant_myspell.lib "
-            r".\bin\release\pdb\libenchant_myspell.pdb "
-            r"lib\enchant"
-        )
-
+        self.exec_vs(["make", "install"], add_path=msys_path)
         self.install(r".\COPYING.LIB share\doc\enchant")

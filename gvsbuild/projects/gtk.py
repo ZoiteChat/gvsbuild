@@ -35,8 +35,10 @@ class Project_gtk_base(Tarball, Project, MakeGir):
             f = os.path.basename(fp)
             lcmsgdir = os.path.join(localedir, f[:-3], "LC_MESSAGES")
             self.builder.make_dir(lcmsgdir)
-            cmd = " ".join(["msgfmt", "-co", os.path.join(lcmsgdir, mo), f])
-            self.builder.exec_cmd(cmd, working_dir=self._get_working_dir())
+            self.builder.exec_cmd(
+                ["msgfmt", "-co", os.path.join(lcmsgdir, mo), f],
+                working_dir=self._get_working_dir(),
+            )
         self.pop_location()
 
         self.install(rf".\COPYING share\doc\{self.name}")
@@ -113,7 +115,10 @@ class Gtk3(Tarball, Meson):
         self.add_param(f"-Dintrospection={enable_gi}")
 
     def build(self):
-        Meson.build(self, meson_params="-Dtests=false -Ddemos=false -Dexamples=false")
+        Meson.build(
+            self,
+            meson_params=["-Dtests=false", "-Ddemos=false", "-Dexamples=false"],
+        )
 
         self.install(r".\COPYING share\doc\gtk3")
 

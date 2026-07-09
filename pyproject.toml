@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gvsbuild"
-version = "2026.5.0"
+version = "2026.6.0"
 description = "GTK stack for Windows"
 readme = "README.md"
 requires-python = "<4.0,>=3.10,!=3.13.4"
@@ -48,6 +48,7 @@ dev = [
     "pytest>=7.1.3,<10.0.0",
     "tox >=4.1.2,<5.0.0",
     "pytest-mock >=3.10.0",
+    "pytest-cov>=7.1.0",
 ]
 
 [[tool.mypy.overrides]]
@@ -58,7 +59,7 @@ ignore_missing_imports = true
 legacy_tox_ini = """
 [tox]
 isolated_build = true
-envlist = py{310,311,312,313,314}
+envlist = py{310,311,312,313,314,314t, 315}
 
 [gh-actions]
 python =
@@ -67,6 +68,8 @@ python =
     3.12: py312
     3.13: py313
     3.14: py314
+    3.14t: py314t
+    3.15: py315
 
 [testenv]
 commands = pytest

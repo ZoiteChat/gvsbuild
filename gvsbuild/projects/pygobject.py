@@ -26,11 +26,11 @@ class PyGObject(Tarball, Meson):
         Project.__init__(
             self,
             "pygobject",
-            version="3.56.2",
+            version="3.56.3",
             lastversion_even=True,
             repository="https://gitlab.gnome.org/GNOME/pygobject",
             archive_url="https://download.gnome.org/sources/pygobject/{major}.{minor}/pygobject-{version}.tar.gz",
-            hash="b816098969544081de9eecedb94ad6ac59c77e4d571fe7051f18bebcec074313",
+            hash="12760e4a0e3d04b6eb95e06f7a27e362c826d567ea613373a92c003b6c70d2d6",
             dependencies=["pycairo", "gobject-introspection", "libffi"],
             patches=[
                 "001-pygobject-py38-load-dll.patch",
@@ -39,7 +39,13 @@ class PyGObject(Tarball, Meson):
 
     def build(self):
         py_dir = Path(sys.executable).parent
-        Meson.build(self, meson_params=f'-Dpython="{py_dir}\\python.exe" -Dtests=false')
+        Meson.build(
+            self,
+            meson_params=[
+                f"-Dpython={py_dir}\\python.exe",
+                "-Dtests=false",
+            ],
+        )
         gtk_dir = self.builder.gtk_dir
         add_inc = [
             str(Path(gtk_dir) / "include" / "cairo"),
@@ -49,12 +55,13 @@ class PyGObject(Tarball, Meson):
         ]
         self.builder.mod_env("INCLUDE", ";".join(add_inc))
         if self.builder.opts.py_wheel:
-            self.exec_vs(r"%(python_dir)s\python.exe -m build --wheel")
+            python_exe = str(py_dir / "python.exe")
+            self.exec_vs([python_exe, "-m", "build", "--wheel"])
             dist_dir = Path(self.build_dir) / "dist"
             for path in dist_dir.rglob("*.whl"):
                 self.exec_vs(
-                    r"%(python_dir)s\python.exe -m pip install --force-reinstall "
-                    + str(path)
+                    [python_exe, "-m", "pip", "install", "--force-reinstall", str(path)]
                 )
+
                 self.install_dir("dist", "python")
         self.install(r".\COPYING share\doc\pygobject")

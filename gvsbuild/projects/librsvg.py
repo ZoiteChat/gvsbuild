@@ -13,6 +13,8 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program; if not, see <http://www.gnu.org/licenses/>.
 
+from pathlib import Path
+
 from gvsbuild.utils.base_builders import Meson
 from gvsbuild.utils.base_expanders import Tarball
 from gvsbuild.utils.base_project import Project, project_add
@@ -24,10 +26,10 @@ class Librsvg(Tarball, Meson):
         Project.__init__(
             self,
             "librsvg",
-            version="2.62.1",
+            version="2.62.3",
             repository="https://gitlab.gnome.org/GNOME/librsvg",
             archive_url="https://download.gnome.org/sources/librsvg/{major}.{minor}/librsvg-{version}.tar.xz",
-            hash="b41ca84206242fddd826a2bf76348d7cdf52c1050cbfa060b866e81a252145c3",
+            hash="7eb449b2722a768021356f66dfee3202c229b54ed4e6a70ce40c090e97ff16f2",
             dependencies=[
                 "cargo",
                 "cairo",
@@ -52,9 +54,10 @@ class Librsvg(Tarball, Meson):
         self.add_param("-Dpixbuf-loader=enabled")
 
     def build(self):
-        self.builder.exec_cargo("install cargo-c --locked")
+        self.builder.exec_cargo(["install", "cargo-c", "--locked"])
         Meson.build(self)
         self.install(r".\COPYING.LIB share\doc\librsvg")
 
     def post_install(self):
-        self.exec_cmd(r"%(gtk_dir)s\bin\gdk-pixbuf-query-loaders.exe --update-cache")
+        exe = Path(self.builder.gtk_dir) / "bin" / "gdk-pixbuf-query-loaders.exe"
+        self.exec_cmd([exe, "--update-cache"])

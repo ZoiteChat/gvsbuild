@@ -28,7 +28,7 @@ class ToolCargo(Tool):
         Tool.__init__(
             self,
             "cargo",
-            version="1.95.0",
+            version="1.96.0",
             repository="https://github.com/rust-lang/rust",
             archive_url="https://win.rustup.rs/x86_64",
             archive_filename="rustup-init.exe",
@@ -52,7 +52,13 @@ class ToolCargo(Tool):
             f"{self.version}-{'i686' if self.opts.x86 else 'x86_64'}-pc-windows-msvc"
         )
         subprocess.run(
-            f"{self.archive_file} --no-modify-path --default-toolchain {toolchain} -y",
+            [
+                self.archive_file,
+                "--no-modify-path",
+                "--default-toolchain",
+                toolchain,
+                "-y",
+            ],
             check=True,
             env=env,
         )
@@ -66,10 +72,10 @@ class ToolCmake(Tool):
         Tool.__init__(
             self,
             "cmake",
-            version="4.3.2",
+            version="4.3.3",
             repository="https://gitlab.kitware.com/cmake/cmake",
             archive_url="https://github.com/Kitware/CMake/releases/download/v{version}/cmake-{version}-windows-x86_64.zip",
-            hash="83d20c23f5c5f64b3b328785e35b23c532e33057a97ed6294acaca3781b78a01",
+            hash="935ade9e5e8723583c07f44c5592cea2a1c8f65c56ca7e07b34c025c880e0bd6",
             dir_part="cmake-{version}-windows-x86_64",
         )
 
@@ -216,10 +222,10 @@ class ToolGo(Tool):
         Tool.__init__(
             self,
             "go",
-            version="1.26.2",
+            version="1.26.4",
             repository="https://github.com/golang/go",
             archive_url="https://go.dev/dl/go{version}.windows-amd64.zip",
-            hash="98eb3570bade15cb826b0909338df6cc6d2cf590bc39c471142002db3832b708",
+            hash="20d2ceafb4ed41b96b879010927b28bc92a5be57a7c1801ce365a9ca51d3224a",
             dir_part="go-{version}",
         )
 

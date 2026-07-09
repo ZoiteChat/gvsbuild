@@ -15,7 +15,6 @@
 
 """Various builders (meson, CMake, ...) class."""
 
-import os
 import shutil
 import sys
 from pathlib import Path
@@ -38,45 +37,55 @@ class Meson(Project):
         self._ensure_params()
         self.params.append(par)
 
-    def build(self, meson_params=None, make_tests=False, add_path=None):
+    def build(
+        self,
+        meson_params: list[str] | None = None,
+        make_tests: bool = False,
+        add_path=None,
+    ):
         # where we build, with ninja, the library
-        ninja_build = os.path.join(self.build_dir, "_gvsbuild-meson")
+        ninja_build = Path(self.build_dir) / "_gvsbuild-meson"
 
         # First we check if we need to generate the meson build files
-        if not os.path.isfile(os.path.join(ninja_build, "build.ninja")):
+        if not (ninja_build / "build.ninja").is_file():
             self._setup_meson_and_ninja(ninja_build, meson_params, add_path)
         if make_tests:
             # Run ninja to build all (library, ....
             self.builder.exec_ninja(working_dir=ninja_build)
             # .. run the tests ...
-            self.builder.exec_ninja(params="test", working_dir=ninja_build)
+            self.builder.exec_ninja(params=["test"], working_dir=ninja_build)
             # .. and finally install everything
         # if we don't make the tests we simply run 'ninja install' that takes care of everything,
         # running explicitly from the build dir
-        self.builder.exec_ninja(params="install", working_dir=ninja_build)
+        self.builder.exec_ninja(params=["install"], working_dir=ninja_build)
 
-    def _setup_meson_and_ninja(self, ninja_build, meson_params, add_path):
+    def _setup_meson_and_ninja(
+        self, ninja_build, meson_params: list[str] | None, add_path
+    ):
         log.start_verbose("Generating meson directory")
         self.builder.make_dir(ninja_build)
-        # base params
         self._ensure_params()
-        add_opts = " ".join(self.params) + " " if self.params else ""
-        # debug info
         build_type = self.builder.opts.configuration
         if self.builder.opts.release_configuration_is_actually_debug_optimized:
             build_type = "debugoptimized"
-        add_opts += f"--buildtype {build_type}"
-        if meson_params:
-            add_opts += f" {meson_params}"
-        if self.extra_opts:
-            extra_opts = " ".join(self.extra_opts)
-            add_opts += f" {extra_opts}"
-        # python meson.py src_dir ninja_build_dir --prefix gtk_bin options
+
         meson = Project.get_tool_executable("meson")
-        python = Path(sys.executable)
-        if " " in str(python):
-            python = f'"{python}"'
-        cmd = f"{python} {meson} setup {self._get_working_dir()} {ninja_build} --prefix {self.builder.gtk_dir} {add_opts}"
+        cmd = [
+            sys.executable,
+            meson,
+            "setup",
+            self._get_working_dir(),
+            ninja_build,
+            "--prefix",
+            self.builder.gtk_dir,
+            "--buildtype",
+            build_type,
+        ]
+        cmd += self.params
+        if meson_params:
+            cmd += meson_params
+        if self.extra_opts:
+            cmd += self.extra_opts
 
         # build the ninja file to do everything (build the library, create the .pc file, install it, ...)
         self.exec_vs(cmd, add_path=add_path)
@@ -89,12 +98,12 @@ class CmakeProject(Project):
 
     def build(
         self,
-        cmake_params=None,
-        use_ninja=False,
-        make_tests=False,
-        do_install=True,
-        out_of_source=None,
-        source_part=None,
+        cmake_params: list[str] | None = None,
+        use_ninja: bool = False,
+        make_tests: bool = False,
+        do_install: bool = True,
+        out_of_source: bool | None = None,
+        source_part: str | None = None,
     ):
         cmake_gen = "Ninja" if use_ninja else "NMake Makefiles"
 
@@ -104,25 +113,31 @@ class CmakeProject(Project):
         if self.builder.opts.release_configuration_is_actually_debug_optimized:
             cmake_config = "RelWithDebInfo"
         # Create the command for cmake
-        cmd = f'cmake -G "{cmake_gen}" -DCMAKE_INSTALL_PREFIX="%(pkg_dir)s" -DGTK_DIR="%(gtk_dir)s" -DCMAKE_BUILD_TYPE={cmake_config}'
+        cmd = [
+            "cmake",
+            "-G",
+            cmake_gen,
+            f"-DCMAKE_INSTALL_PREFIX={self.pkg_dir}",
+            f"-DGTK_DIR={self.builder.gtk_dir}",
+            f"-DCMAKE_BUILD_TYPE={cmake_config}",
+        ]
         if cmake_params:
-            cmd += f" {cmake_params}"
+            cmd += cmake_params
         if self.extra_opts:
-            extra_opts = " ".join(self.extra_opts)
-            cmd += f" {extra_opts}"
+            cmd += self.extra_opts
         if use_ninja and out_of_source is None:
             # For ninja the default is build out of source
             out_of_source = True
 
         if out_of_source:
-            cmake_dir = os.path.join(self.build_dir, "_gvsbuild-cmake")
-
+            cmake_dir = Path(self.build_dir) / "_gvsbuild-cmake"
             self.builder.make_dir(cmake_dir)
-            if source_part:
-                src_full = os.path.join(self.build_dir, source_part)
-            else:
-                src_full = self.build_dir
-            cmd += f" -B{cmake_dir} -H{src_full}"
+            src_full = (
+                Path(self.build_dir) / source_part
+                if source_part
+                else Path(self.build_dir)
+            )
+            cmd += ["-B", str(cmake_dir), "-S", str(src_full)]
             work_dir = cmake_dir
         else:
             work_dir = self._get_working_dir()
@@ -135,17 +150,19 @@ class CmakeProject(Project):
         if use_ninja:
             if make_tests:
                 self.builder.exec_ninja(working_dir=work_dir)
-                self.builder.exec_ninja(params="test", working_dir=work_dir)
+                self.builder.exec_ninja(params=["test"], working_dir=work_dir)
                 if do_install:
-                    self.builder.exec_ninja(params="install", working_dir=work_dir)
+                    self.builder.exec_ninja(params=["install"], working_dir=work_dir)
             elif do_install:
-                self.builder.exec_ninja(params="install", working_dir=work_dir)
+                self.builder.exec_ninja(params=["install"], working_dir=work_dir)
             else:
                 self.builder.exec_ninja(working_dir=work_dir)
         else:
-            self.builder.exec_vs("nmake /nologo", working_dir=work_dir)
+            self.builder.exec_vs(["nmake", "/nologo"], working_dir=work_dir)
             if do_install:
-                self.builder.exec_vs("nmake /nologo install", working_dir=work_dir)
+                self.builder.exec_vs(
+                    ["nmake", "/nologo", "install"], working_dir=work_dir
+                )
 
 
 class Rust(Project):
@@ -176,17 +193,17 @@ class Rust(Project):
         if self.extra_opts:
             params.extend(self.extra_opts)
 
-        cargo_build = os.path.join(self.build_dir, "cargo-build")
+        cargo_build = Path(self.build_dir) / "cargo-build"
 
         params.append(f"--target-dir={cargo_build}")
 
-        if self.clean and os.path.exists(cargo_build):
+        if self.clean and cargo_build.exists():
             log.debug(f"Removing cargo build dir '{cargo_build}'")
             shutil.rmtree(cargo_build, onerror=_rmtree_error_handler)
 
         # build
         self.builder.exec_cargo(
-            params=" ".join(["build"] + params),
+            params=["build"] + params,
             working_dir=self.build_dir,
             rustc_opts=rustc_opts,
             rust_version=self.version,
@@ -195,15 +212,13 @@ class Rust(Project):
         # test
         if make_tests:
             self.builder.exec_cargo(
-                params=" ".join(["test"] + params),
+                params=["test"] + params,
                 working_dir=self.build_dir,
                 rustc_opts=rustc_opts,
                 rust_version=self.version,
             )
 
-        shutil.copytree(
-            os.path.join(cargo_build, folder), os.path.join(cargo_build, "lib")
-        )
+        shutil.copytree(cargo_build / folder, cargo_build / "lib")
 
 
 class MakeGir:
@@ -215,14 +230,23 @@ class MakeGir:
         if not prj_dir:
             prj_dir = prj_name
 
-        b_dir = f"{self.builder.working_dir}\\{prj_dir}\\build\\win32"
-        if not os.path.isfile(os.path.join(b_dir, "detectenv-msvc.mak")):
-            b_dir = f"{self.builder.working_dir}\\{prj_dir}\\win32"
-            if not os.path.isfile(os.path.join(b_dir, "detectenv-msvc.mak")):
+        b_dir = Path(self.builder.working_dir) / prj_dir / "build" / "win32"
+        if not (b_dir / "detectenv-msvc.mak").is_file():
+            b_dir = Path(self.builder.working_dir) / prj_dir / "win32"
+            if not (b_dir / "detectenv-msvc.mak").is_file():
                 log.message(f"Unable to find detectenv-msvc.mak for {prj_name}")
                 return
 
-        cmd = f"nmake -f {prj_name}-introspection-msvc.mak CFG={self.builder.opts.configuration} PREFIX={self.builder.gtk_dir} PYTHON={Project.get_tool_executable('python')} install-introspection"
+        python = Project.get_tool_executable("python")
+        cmd = [
+            "nmake",
+            "-f",
+            f"{prj_name}-introspection-msvc.mak",
+            f"CFG={self.builder.opts.configuration}",
+            f"PREFIX={self.builder.gtk_dir}",
+            f"PYTHON={python}",
+            "install-introspection",
+        ]
 
         self.push_location(b_dir)
         self.exec_vs(cmd)

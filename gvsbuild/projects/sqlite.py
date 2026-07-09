@@ -23,17 +23,26 @@ class SQLite(Tarball, Project):
         Project.__init__(
             self,
             "sqlite",
-            version="3.53.0",
+            version="3.53.2",
             repository="https://github.com/sqlite/sqlite",
             archive_url="https://www.sqlite.org/2026/sqlite-autoconf-{major}{minor:0<3}{micro:0<3}.tar.gz",
-            hash="851e9b38192fe2ceaa65e0baa665e7fa06230c3d9bd1a6a9662d02380d73365a",
+            hash="588ad51949419a56ebe81fe56193d510c559eb94c9a57748387860b5d3069316",
         )
 
     def build(self):
         nmake_debug = (
             "DEBUG=2" if self.builder.opts.configuration == "debug" else "DEBUG=0"
         )
-        self.exec_vs(f"nmake /f Makefile.msc sqlite3.dll DYNAMIC_SHELL=1 {nmake_debug}")
+        self.exec_vs(
+            [
+                "nmake",
+                "/f",
+                "Makefile.msc",
+                "sqlite3.dll",
+                "DYNAMIC_SHELL=1",
+                nmake_debug,
+            ]
+        )
 
         self.install("sqlite3.h include")
         self.install("sqlite3ext.h include")

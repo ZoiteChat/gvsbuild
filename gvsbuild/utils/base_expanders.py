@@ -20,12 +20,14 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import subprocess
 import sys
 import tarfile
 import zipfile
 from collections.abc import Iterator
 from pathlib import Path
 
+from . import offline_repos
 from .simple_ui import log
 from .utils import rmtree_full
 
@@ -418,13 +420,14 @@ class GitRepo:
             t_name = [c if c.isalnum() else "_" for c in self.tag]
             tag_name = "".join(t_name)
         else:
-            of = os.path.join(src_dir, ".git-temp.rsp")
-            self.builder.exec_msys(
-                f"git rev-parse --short HEAD >{of}", working_dir=src_dir
+            result = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=src_dir,
+                capture_output=True,
+                text=True,
+                check=True,
             )
-            with open(of, encoding="utf-8") as fi:
-                tag_name = fi.readline().rstrip("\n")
-            os.remove(of)
+            tag_name = result.stdout.strip()
 
         return tag_name
 
@@ -484,10 +487,33 @@ class GitRepo:
     def unpack(self):
         self.update_build_dir()
 
+    def fetch_to_mirror(self):
+        """Populate the offline mirror archive for this git project."""
+        offline_repos.fetch_to_mirror(self)
+
     def _update_dir(self, remove_dest=False):
         dest = os.path.join(self.opts.git_expand_dir, self.name)
         if (self.clean or remove_dest) and os.path.isdir(dest):
             rmtree_full(dest)
+
+        if self.opts.offline:
+            # Never hit the network: reconstruct the checkout from the mirror
+            # archive and check out the pinned revision without fetching.
+            if not os.path.isdir(dest) and not offline_repos.restore_mirror_archive(
+                self, dest
+            ):
+                log.error_exit(
+                    f"offline: no mirror archive for git project '{self.name}' "
+                    f"in {os.path.join(self.opts.archives_download_dir, 'git')}"
+                )
+            log.start(f"(git) Checking out {dest} offline")
+            if self.tag:
+                self.builder.exec_msys(f"git checkout -f {self.tag}", working_dir=dest)
+            else:
+                self.builder.exec_msys("git checkout -f", working_dir=dest)
+            if self.fetch_submodules:
+                self._update_submodules("Update submodule(s)", dest)
+            return self.create_zip()
 
         if not os.path.isdir(dest):
             return self._clone_and_checkout(dest)
@@ -508,10 +534,12 @@ class GitRepo:
     def _clone_and_checkout(self, dest):
         log.start(f"(git) Cloning {self.repository} to {dest}")
 
-        self.builder.exec_msys(f"git clone {self.repository} {dest}")
+        self.builder.exec_msys(["git", "clone", self.repository, dest])
 
         if self.tag:
-            self.builder.exec_msys(f"git checkout -f {self.tag}", working_dir=dest)
+            self.builder.exec_msys(
+                ["git", "checkout", "-f", self.tag], working_dir=dest
+            )
 
         if self.fetch_submodules:
             self._update_submodules("Fetch submodule(s)", dest)
@@ -520,7 +548,9 @@ class GitRepo:
 
     def _update_submodules(self, log_value, dest):
         log.start_verbose(log_value)
-        self.builder.exec_msys("git submodule update --init", working_dir=dest)
+        self.builder.exec_msys(
+            ["git", "submodule", "update", "--init"], working_dir=dest
+        )
         log.end()
 
     def update_build_dir(self):
@@ -548,7 +578,7 @@ class GitRepo:
         src_dir = os.path.join(self.opts.git_expand_dir, self.name)
         filename = f"{self.name}-{self.get_tag_name(src_dir)}.zip"
         self.builder.exec_msys(
-            f"git archive -o {filename} HEAD", working_dir=self.build_dir
+            ["git", "archive", "-o", filename, "HEAD"], working_dir=self.build_dir
         )
 
         path = os.path.join(self.export_dir, f"{self.name}.zip")

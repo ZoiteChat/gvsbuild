@@ -24,11 +24,11 @@ class Libsigcplusplus(Tarball, Meson):
             self,
             "libsigc++",
             prj_dir="libsigc++",
-            version="3.8.0",
+            version="3.8.1",
             lastversion_even=True,
             repository="https://github.com/libsigcplusplus/libsigcplusplus",
             archive_url="https://github.com/libsigcplusplus/libsigcplusplus/releases/download/{version}/libsigc++-{version}.tar.xz",
-            hash="502a743bb07ed7627dd41bd85ec4b93b4954f06b531adc45818d24a959f54e36",
+            hash="4ff41d1474e501d3baeced4c989d154338206ac16471e614376496b63fe252d1",
             dependencies=[
                 "meson",
                 "ninja",
@@ -38,7 +38,7 @@ class Libsigcplusplus(Tarball, Meson):
     def build(self):
         Meson.build(
             self,
-            meson_params="-Dbuild-examples=false -Dbuild-documentation=false",
+            meson_params=["-Dbuild-examples=false", "-Dbuild-documentation=false"],
         )
 
         self.install(r".\COPYING share\doc\libsigc++")
@@ -51,12 +51,12 @@ class Libsigcplusplus2(Tarball, Meson):
             self,
             "libsigc++-2.0",
             prj_dir="libsigc++-2.0",
-            version="2.12.1",
+            version="2.12.2",
             lastversion_even=True,
             lastversion_major=2,
             repository="https://github.com/libsigcplusplus/libsigcplusplus",
             archive_url="https://github.com/libsigcplusplus/libsigcplusplus/releases/download/{version}/libsigc++-{version}.tar.xz",
-            hash="a9dbee323351d109b7aee074a9cb89ca3e7bcf8ad8edef1851f4cf359bd50843",
+            hash="7d4cdf1e4332ebfee8085ad960075045e7763cb291b3ccf4744d7cbf08a22b75",
             dependencies=[
                 "meson",
                 "ninja",
@@ -66,7 +66,7 @@ class Libsigcplusplus2(Tarball, Meson):
     def build(self):
         Meson.build(
             self,
-            meson_params="-Dbuild-examples=false -Dbuild-documentation=false",
+            meson_params=["-Dbuild-examples=false", "-Dbuild-documentation=false"],
         )
 
         self.install(r".\COPYING share\doc\libsigc++-2.0")

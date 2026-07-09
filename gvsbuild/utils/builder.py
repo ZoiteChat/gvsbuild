@@ -27,7 +27,7 @@ import ssl
 import subprocess
 import time
 import traceback
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from urllib.error import ContentTooShortError, URLError
 from urllib.request import urlopen
 
@@ -218,6 +218,7 @@ class Builder:
         msys_pkg = [
             ("patch", "patch"),
             ("make", "make"),
+            ("ar", "binutils"),
             ("md5sum", "coreutils"),
             ("diff", "diffutils"),
             ("bison", "bison"),
@@ -1035,7 +1036,7 @@ class Builder:
         if env is None:
             return args  # subprocess inherits parent env and no custom PATH to search
         first = Path(args[0])
-        if first.parent != Path("."):
+        if first.parent != Path(".") or PureWindowsPath(args[0]).is_absolute():
             return args  # absolute or path-qualified — pass through
         search_path = env.get("PATH")
         resolved = shutil.which(first.name, path=search_path)

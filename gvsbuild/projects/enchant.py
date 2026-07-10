@@ -49,6 +49,7 @@ class Enchant(Tarball, Project):
                 f"--prefix={prefix}",
                 f"--host={host}",
                 "--disable-static",
+                "--disable-gcc-warnings",
                 "--without-aspell",
                 "--without-hspell",
                 "--without-hunspell",
@@ -71,16 +72,21 @@ class Enchant(Tarball, Project):
             ],
             add_path=msys_path,
         )
-        for makefile in ("lib/Makefile", "src/Makefile"):
-            self.exec_vs(
-                [
-                    bash,
-                    "-c",
-                    "sed -i -e 's/-isystem /-I/g' "
-                    f"-e 's/--include config.h/-FIconfig.h/g' {makefile}",
-                ],
-                add_path=msys_path,
-            )
+
+        # Enchant's generated makefiles contain GCC-only options. Normalize all
+        # of them, including providers/Makefile for the WinSpell module, rather
+        # than patching only the first subdirectories encountered by the build.
+        self.exec_vs(
+            [
+                bash,
+                "-c",
+                'PATH="/usr/bin:$PATH"; export PATH; '
+                "find . -type f -name Makefile -exec "
+                "sed -i -e 's/-isystem /-I/g' "
+                "-e 's/--include config.h/-FIconfig.h/g' {} +",
+            ],
+            add_path=msys_path,
+        )
 
         self.exec_vs(
             [bash, "-c", 'PATH="/usr/bin:$PATH" exec make install'],

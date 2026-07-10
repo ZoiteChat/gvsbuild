@@ -1,9 +1,10 @@
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
   release:
     types: [published]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -31,7 +32,7 @@ jobs:
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
@@ -63,7 +64,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
@@ -99,7 +100,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
@@ -120,6 +121,24 @@ jobs:
         run: > # Use -j2 option to prevent out of memory errors with GitHub Action runners
           uv run gvsbuild build --ninja-opts -j2 --enable-gi --py-wheel gtk4 libadwaita gtksourceview5 pygobject protobuf-c
           adwaita-icon-theme gtkmm
+      - name: Verify Enchant GTK3 artifacts
+        if: matrix.gtk-version == '3'
+        shell: pwsh
+        run: |
+          $requiredPatterns = @(
+            'C:\gtk-build\gtk\x64\release\bin\libenchant-2*.dll',
+            'C:\gtk-build\gtk\x64\release\bin\enchant-2.exe',
+            'C:\gtk-build\gtk\x64\release\bin\enchant-lsmod-2.exe',
+            'C:\gtk-build\gtk\x64\release\lib\libenchant-2*.lib',
+            'C:\gtk-build\gtk\x64\release\include\enchant-2\enchant*.h',
+            'C:\gtk-build\gtk\x64\release\lib\enchant-2\*.dll'
+          )
+
+          foreach ($pattern in $requiredPatterns) {
+            if (-not (Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue)) {
+              throw "Required Enchant artifact was not installed: $pattern"
+            }
+          }
       - name: Copy wheel files
         run: |
           New-Item "C:\gtk-build\gtk\x64\release\wheels" -ItemType "directory"
